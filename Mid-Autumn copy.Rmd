@@ -1,0 +1,351 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+Introducing Sentiment Analysis
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. 
+
+Sentimental Analysis, also known as "Opinion mining", Sentiment Analysis refers to the use of Natural Language Processing to dertermine the attitude, opinions and emotions of a speaker, writer, or other subject within an online mention.If you find yourself more interest in Sentimental Analysis, you can check more detail informations and resources [here](https://monkeylearn.com/sentiment-analysis/)
+
+There will be two case studies in this project:
+1. Case1: twitter comments frequency and wordcloud visulization
+2. Case2: sentimental words analysis 
+
+```{r}
+# Case 1 mainly applies twitter API by creating a personal twitter application.
+# After we get the api and access token, we use R link twitter to fetch data
+# There will be some changes in data format and data type
+# This step is to retrieve the package and link twitter api
+
+# load packages
+require(twitteR)
+require(ROAuth)
+require(plyr)
+require(stringr)
+
+# input require URL, access URL, authorization URL
+# input api key and secret, access token and token secret
+# use setup_twitter_oauth() to setup connection between R and twitter
+reqURL <- "https://api.twitter.com/oauth/request_token"
+accessURL <- "http://api.twitter.com/oauth/access_token"
+authURL <- "http://api.twitter.com/oauth/authorize"
+api_key <- "VelN9ZR8Yay2ThPU2qsS2tieV"
+api_secret <- "LGsJXEKrWt75zrfm6tUfJJJmmYFtWNHPJHeHdUcnV2uzL6SNPS"
+access_token <- "919714705601544192-LgbxJXbqMPRHQKPIhiDt3Uo74zKuijs"
+access_token_secret <- "8EWSThCvmrFQItRjxHJhQM1Y09U4FMCIWLIMk0SMgJBA0"
+setup_twitter_oauth(api_key,api_secret,access_token,access_token_secret)
+```
+
+```{r}
+# Here we grab the data of the past month, the keyword is 'mooncake'
+mooncake <- searchTwitter(c("mooncake"),
+                          # number of comments equals to 5000
+                          n=5000, 
+                          # language equals to "english"
+                          lang="en",
+                          # start date
+                         since = '2019-08-20',
+                         # end date
+                         until = '2019-09-20',
+                         # If not NULL, return filtered tweets as per value, show recent value
+                         resultType='recent')
+```
+
+```{r}
+# check the length of data
+length(mooncake)
+```
+
+```{r}
+# example of the first comment
+mooncake[[1]]
+```
+
+```{r}
+# load package 'text mining' and 'ColorBrewer Palettes' for text cleaning 
+library(tm)
+library(RColorBrewer)
+```
+
+```{r}
+# transfer to data frame
+mooncake <- twListToDF(mooncake)
+```
+
+```{r}
+head(mooncake)
+```
+
+```{r}
+# use corpus statement to convert text column in mooncake data to a friendly struture of text
+corpus <- Corpus(VectorSource(mooncake$text))
+```
+
+```{r}
+corpus[[1]][1]
+```
+
+```{r}
+# Text Cleaning
+
+# convert the text to lower case
+corpus <- tm_map(corpus, content_transformer(tolower))
+```
+
+```{r}
+# remove numbers
+corpus <- tm_map(corpus, removeNumbers)
+```
+
+```{r}
+# remove english common stopwords
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+```
+
+```{r}
+# remove punctuations
+corpus <- tm_map(corpus, removePunctuation)
+```
+
+```{r}
+# eliminate extra white spaces
+corpus <- tm_map(corpus, stripWhitespace)
+```
+
+```{r}
+# remove additional user-defined stopwords
+# you can add any additional stopwords you want
+corpus <- tm_map(corpus, removeWords, c("get","told","gave", "took", "can","said",
+                                        "asked","will","spoke","got","really"))
+```
+
+```{r}
+corpus[[1]][1]
+```
+
+```{r}
+# Create TDM (term document matrix)
+tdm <- TermDocumentMatrix(corpus)
+```
+
+```{r}
+# Convert to matrix
+m <- as.matrix(tdm)
+```
+
+```{r}
+# sort each corpus frequency
+v <- sort(rowSums(m),decreasing = TRUE)
+```
+
+```{r}
+# convert to data frame by combining the corpus and corpus frequency
+d <- data.frame(word = names(v), freq = v)
+```
+
+```{r}
+# load package 'wordcloud' to visualize
+library(wordcloud)
+
+wordcloud(d$word, # given text
+          d$freq, # gievn text frequency
+          random.order = FALSE, # plot the texts in decreasing frequency
+          rot.per = 0.3, # proportion words with 30 degree rotation
+          scale = c(4,.5), # range of the size of the words
+          max.words = 300, # maximum numver of words to be plotted
+          colors = brewer.pal(8,"Dark2")) # color
+# adding title to the plot
+title(main = "Word Cloud - Unigram", font.main = 1, cex.main = 1.5)
+```
+
+
+```{r}
+# Part II: Sentimental Words Analysis
+
+# For case 2 we are going to grab two keywords: 'mooncake' and 'MidAutumn'
+# Split the results of the keywords and compare them 
+# The way to compare is to load two text files, which cover the 'positive' and 'negative' emotional words
+# Then compare the results to see if the positive match more or negative
+```
+
+```{r}
+# load packages
+library(ROAuth)
+library(plyr)
+library(stringr)
+```
+
+```{r}
+# set working directory and improt delim files of positive and negative emotional words
+setwd("~/Desktop/BusinessAnalytics/Twitter Sentimental Analysis")
+posText <- read.delim("positivewords.txt", header=FALSE, 
+                      stringsAsFactors=FALSE)
+posText <- posText$V1
+posText <- unlist(lapply(posText, function(x) { str_split(x, "\n") }))
+
+negText <- read.delim("negativewords.txt", header=FALSE, 
+                      stringsAsFactors=FALSE)
+negText <- negText$V1
+negText <- unlist(lapply(negText, function(x) { str_split(x, "\n") }))
+
+# Adding some additional positive and negative words
+# you can add anything you like as long as it is emotional words
+pos.words = c(posText, 'upgrade')
+neg.words = c(negText, 'wtf', 'wait', 'waiting','epicfail', 'mechanical')
+```
+
+```{r}
+# function score.sentiment
+score.sentiment = function(sentences, pos.words, neg.words, .progress='none')
+{
+  # sentences: vector of text to score
+  # pos.words: vector of words of postive sentiment
+  # neg.words: vector of words of negative sentiment
+  # .progress: passed to laply() to control of progress bar
+  # create simple array of scores with laply
+  scores = laply(sentences,
+                 function(sentence, pos.words, neg.words)
+                 {
+                   # remove punctuation
+                   sentence = gsub("[[:punct:]]", "", sentence)
+                   # remove control characters
+                   sentence = gsub("[[:cntrl:]]", "", sentence)
+                   # remove digits?
+                   sentence = gsub('\\d+', '', sentence)
+                   # define error handling function when trying tolower
+                   tryTolower = function(x)
+                   {
+                     # create missing value
+                     y = NA
+                     # tryCatch error
+                     try_error = tryCatch(tolower(x), error=function(e) e)
+                     # if not an error
+                     if (!inherits(try_error, "error"))
+                       y = tolower(x)
+                     # result
+                     return(y)
+                   }
+                   # use tryTolower with sapply
+                   sentence = sapply(sentence, tryTolower)
+                   # split sentence into words with str_split (stringr package)
+                   word.list = str_split(sentence, "\\s+")
+                   words = unlist(word.list)
+                   # compare words to the dictionaries of positive & negative terms
+                   pos.matches = match(words, pos.words)
+                   neg.matches = match(words, neg.words)
+                   # get the position of the matched term or NA
+                   # we just want a TRUE/FALSE
+                   pos.matches = !is.na(pos.matches)
+                   neg.matches = !is.na(neg.matches)
+                   # final score
+                   score = sum(pos.matches) - sum(neg.matches)
+                   return(score)
+                 }, pos.words, neg.words, .progress=.progress )
+  # data frame with scores for each sentence
+  scores.df = data.frame(text=sentences, score=scores)
+  return(scores.df)
+}
+```
+
+```{r}
+# tweets with mooncake and MidAutumn
+mooncake_tweets <- searchTwitter(c("mooncake"),
+                          n=5000, 
+                          lang="en",
+                         since = '2019-08-20',
+                         until = '2019-09-20',
+                         resultType='recent')
+
+MidAutumn_tweets <- searchTwitter(c("MidAutumn"),
+                          n=5000, 
+                          lang="en",
+                         since = '2019-08-20',
+                         until = '2019-09-20',
+                         resultType='recent')
+
+print(head(mooncake_tweets,1))
+print(head(MidAutumn_tweets,1))
+```
+
+```{r}
+# convert the tweets to a text format
+# the purpose of doing this is to bring text to the algorithm to do the calculation
+mooncake_txt = sapply(mooncake_tweets, function(x) x$getText())
+MidAutumn_txt = sapply(MidAutumn_tweets, function(x) x$getText())
+head(mooncake_txt,1)
+head(MidAutumn_txt,1)
+```
+
+```{r}
+# check the length of each keyword text
+noof_tweets = c(length(mooncake_txt), length(MidAutumn_txt))
+```
+
+```{r}
+# combine them 
+combined = c(mooncake_txt, MidAutumn_txt)
+```
+
+```{r}
+# apply the algorithm to calculate the score for each comments
+scores = score.sentiment(combined, pos.words, neg.words, .progress='text')
+# check the first five comments
+head(scores)
+```
+
+```{r}
+scores$combined = factor(rep(c("mooncake", "MidAutumn"), noof_tweets))
+```
+
+```{r}
+# create three columns 'positive','negaitve' and 'neutral' by categorize the score
+# postive equals to any score greater than 0
+# negaitve equals to any score smaller than 0
+# neutral equals to any score equals to 0
+scores$positive <- as.numeric(scores$score >0)
+scores$negative <- as.numeric(scores$score >0)
+scores$neutral <- as.numeric(scores$score==0)
+```
+
+```{r}
+# split the data frame into two individual datasets for mooncake and MidAutumn
+combined_mooncake <- subset(scores, scores$combined=="mooncake")
+combined_MidAutumn <- subset(scores, scores$combined=="MidAutumn")
+
+# Create polarity variable for each data frame.
+combined_mooncake$polarity = ifelse(combined_mooncake$score >0,"positive",
+                                   ifelse(combined_mooncake$score < 0,"negative",
+                                          ifelse(combined_mooncake$score==0,"Neutral",0)))
+
+combined_MidAutumn$polarity = ifelse(combined_MidAutumn$score >0,"positive",
+                                   ifelse(combined_MidAutumn$score < 0,"negative",
+                                          ifelse(combined_MidAutumn$score==0,"Neutral",0)))
+```
+
+```{r}
+# get the final result
+combined = rbind(combined_mooncake, combined_MidAutumn)
+head(combined)
+```
+
+```{r}
+# visualization - compares people's feelings about two hashtages
+library(ggplot2)
+ggplot(combined, aes(x=factor(polarity))) +
+  geom_bar(aes(fill=polarity)) +
+  facet_grid(.~combined)
+```
+
+```{r}
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
